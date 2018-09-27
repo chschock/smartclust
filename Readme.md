@@ -1,6 +1,7 @@
 # SmartClust
 
 ## TL;DR
+
 Here you find a method to make good flat clusters from a hierarchical clustering dendrogram,
 so you choose the clustering parameters and the method chooses flat clusters that for me turned
 out to be better than the standard techniques.
@@ -33,4 +34,11 @@ The second and third factor do the job pushing cluster size towards 1/2 the poin
 
 ## Remarks
 
+### Performance
 The scipy linear program solver is too slow for problems of size 100 already (1 sec), so we use an external one through the pulp package.
+
+### Sample data
+The notebook does nearest neighbour search on vectorizations of wikipedia articles. Those vectorizations are derived from word embeddings. The data is included as such, because it would take some effort to create random data with realistic properties. The data is not easily separable due to its similarity, as it comes from a similarity search.
+
+### when you don't need this
+If you have clearly separable data, which you see by long vertical branches in your dendrogram, like half it's total height, then you probably don't need a smart method to determine flat clusters.
