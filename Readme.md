@@ -21,7 +21,7 @@ There is a natural intuition for determining good clusters: the length of the br
 The feasible set is the set of all combinations of branches, that make up a clustering, which is those that don't have clusters included in clusters (partial overlaps are excluded by the tree structure). Linear integer programming is a natural choice for the optimization, with the binary solutions marking the chosen cluster links. Solvers for this type of problems are not terribly efficient, so we don't want to go beyond linear optimization.
 
 Thus the problem structure is:
-minimize <c, x> under A x = 1 and x_i >= 0 for all i, where 1 is the vector of all 1 components.
+minimize <c, x> subject to A x = 1 and x_i >= 0 for all i, where 1 is the vector of all 1 components.
 A is a matrix of size n_points x n_clusters, where n_clusters is always 2 n_points - 1 due to the nature of the dendrogram, a binary tree.
 The right hand side of Ax=1 means 'a point is in exactly one cluster'.
 
@@ -30,7 +30,7 @@ The coefficients of the objective function that turned out to do what I wanted h
 c(x_i) = branch_length_above_link(x_i) * size(x_i) ** alpha * (n_points - size(x_i)) ** alpha,  alpha ~ 1.7
 where x is a vector with components indicating potential clusters, i.e. we optimize
 \sum_i c(x_i) * x_i.
-The second and third factor do the job pushing cluster size towards 1/2 the points set size, which seems a bit arbitrary but does the job.
+The second and third factor do the job pushing cluster size towards 1/2 the point sets size, which seems a bit arbitrary but does the job.
 
 ## Remarks
 
