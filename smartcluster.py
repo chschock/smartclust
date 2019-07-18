@@ -1,11 +1,120 @@
 import numpy as np
-from scipy.cluster.hierarchy import dendrogram
+from scipy.cluster.hierarchy import dendrogram, to_tree
 from collections import defaultdict
 from pulp import LpProblem, LpVariable, lpSum, LpInteger, LpMinimize
 
 colors = '#FFC312 #C4E538 #12CBC4 #ED4C67 #F79F1F #A3CB38 #1289A7 #B53471 #EE5A24 ' \
          '#009432 #0652DD #833471 #EA2027 #006266 #1B1464 #6F1E51'.split()
 
+
+def flatten_old(Z, stiffness):
+    """
+    Flatten hierarchical cluster tree like `get_lp` but explicitly without invoking
+    LP solver.
+
+    :param Z: linkage matrix
+    :param stiffness: force to push number of custers towards half the link count
+    :return: array mapping point id to (hierarchical) cluster id (not consecutive)
+    """
+
+    root = to_tree(Z)
+    n_links = len(Z)
+
+    def _score_tree(node, parent_dist):
+        """Score nodes and max-aggregate scores on subtrees."""
+        nonlocal n_links
+
+        node.score = (parent_dist - node.dist) * \
+                (n_links - node.count) ** stiffness * node.count ** stiffness
+
+        if node.left is None or node.right is None:
+            node.max_score = node.score
+            node.best_subtree = True
+            return
+
+        for child_node in [node.left, node.right]:
+            _score_tree(child_node, node.dist)
+
+        node.best_subtree = node.score > node.left.max_score + node.right.max_score
+        node.max_score = max(node.score, node.left.max_score + node.right.max_score)
+
+    _score_tree(root, Z[:, 2].max())
+
+    id2cluster = [None] * (n_links + 1)
+    total_score = 0
+
+    def _collect(node, picked_id=None):
+        """Pick topmost best subtrees as clusters."""
+        nonlocal total_score, id2cluster
+
+        if picked_id is None and node.best_subtree:
+            picked_id = node.id
+            total_score += node.max_score
+
+        if node.left is None or node.right is None:
+            id2cluster[node.id] = picked_id  # if picked_id is not None else node.id
+            return
+
+
+        for child_node in [node.left, node.right]:
+            _collect(child_node, picked_id=picked_id)
+
+    _collect(root)
+
+    return id2cluster, total_score
+
+
+def flatten(Z, stiffness):
+    """
+    Flatten hierarchical cluster tree like `get_lp` but explicitly without invoking
+    LP solver.
+
+    :param Z: linkage matrix
+    :param stiffness: force to push number of custers towards half the link count
+    :return: array mapping point id to (hierarchical) cluster id (not consecutive)
+    """
+
+    root = to_tree(Z)
+    n_links = len(Z)
+    id2cluster = [root.id] * (n_links + 1)
+
+    def _score_tree(node, parent_dist):
+        """Score nodes and max-aggregate scores on subtrees."""
+        nonlocal n_links, id2cluster
+
+        node.score = (parent_dist - node.dist) * \
+                     (n_links - node.count) ** stiffness * node.count ** stiffness
+
+        if node.left is None or node.right is None:
+            node.max_score = node.score
+            id2cluster[node.id] = node.id
+            return [node.id]
+
+        sub_ids = [*_score_tree(node.left, node.dist),
+                   *_score_tree(node.right, node.dist)]
+
+        sub_sum = node.left.max_score + node.right.max_score
+        node.max_score = max(node.score, sub_sum)
+        if node.score > sub_sum:
+            # overwrite id2cluster with new best cluster node id
+            for _id in sub_ids:
+                id2cluster[_id] = node.id
+
+        return sub_ids
+
+    _score_tree(root, Z[:, 2].max())
+
+    def _sum_max_scores(node):
+        """Traverse tree till flat cluster roots to sum their max_scores."""
+        nonlocal id2cluster
+        if node.id in id2cluster:
+            return node.max_score
+        else:
+            return _sum_max_scores(node.left) + _sum_max_scores(node.right)
+
+    total_score = _sum_max_scores(root)
+
+    return id2cluster, total_score
 
 def get_lp(Z, stiffness):
     """
@@ -31,11 +140,11 @@ def get_lp(Z, stiffness):
     for l, r, dist, _ in Z:
         superdist[l] = dist
         superdist[r] = dist
-    superdist[n_clust - 1] = 0  # we will form at least two clusters.
+    superdist[n_clust - 1] = Z[:, 2].max()  # we will form at least two clusters.
 
     for i in range(n_pts):
         A[i, i] = 1
-        obj[i] = - superdist[i] * 0
+        obj[i] = - superdist[i] * (n_pts - 1) ** stiffness
 
     for i, (l, r, dist, cnt) in enumerate(Z):
         c = i + n_pts
