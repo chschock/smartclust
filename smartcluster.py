@@ -7,63 +7,6 @@ colors = '#FFC312 #C4E538 #12CBC4 #ED4C67 #F79F1F #A3CB38 #1289A7 #B53471 #EE5A2
          '#009432 #0652DD #833471 #EA2027 #006266 #1B1464 #6F1E51'.split()
 
 
-def flatten_old(Z, stiffness):
-    """
-    Flatten hierarchical cluster tree like `get_lp` but explicitly without invoking
-    LP solver.
-
-    :param Z: linkage matrix
-    :param stiffness: force to push number of custers towards half the link count
-    :return: array mapping point id to (hierarchical) cluster id (not consecutive)
-    """
-
-    root = to_tree(Z)
-    n_links = len(Z)
-
-    def _score_tree(node, parent_dist):
-        """Score nodes and max-aggregate scores on subtrees."""
-        nonlocal n_links
-
-        node.score = (parent_dist - node.dist) * \
-                (n_links - node.count) ** stiffness * node.count ** stiffness
-
-        if node.left is None or node.right is None:
-            node.max_score = node.score
-            node.best_subtree = True
-            return
-
-        for child_node in [node.left, node.right]:
-            _score_tree(child_node, node.dist)
-
-        node.best_subtree = node.score > node.left.max_score + node.right.max_score
-        node.max_score = max(node.score, node.left.max_score + node.right.max_score)
-
-    _score_tree(root, Z[:, 2].max())
-
-    id2cluster = [None] * (n_links + 1)
-    total_score = 0
-
-    def _collect(node, picked_id=None):
-        """Pick topmost best subtrees as clusters."""
-        nonlocal total_score, id2cluster
-
-        if picked_id is None and node.best_subtree:
-            picked_id = node.id
-            total_score += node.max_score
-
-        if node.left is None or node.right is None:
-            id2cluster[node.id] = picked_id  # if picked_id is not None else node.id
-            return
-
-
-        for child_node in [node.left, node.right]:
-            _collect(child_node, picked_id=picked_id)
-
-    _collect(root)
-
-    return id2cluster, total_score
-
-
 def flatten(Z, stiffness):
     """
     Flatten hierarchical cluster tree like `get_lp` but explicitly without invoking
@@ -115,6 +58,7 @@ def flatten(Z, stiffness):
     total_score = _sum_max_scores(root)
 
     return id2cluster, total_score
+
 
 def get_lp(Z, stiffness):
     """
