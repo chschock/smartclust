@@ -16,7 +16,13 @@ When presenting your data you do probably want flat clusters, as tree like visua
 
 There is a natural intuition for determining good clusters: the length of the branch above a link. The longer it is, the more the group of points below the link separates from the sibling. What if we use this criterion for a global optimization, and push it into acceptable boundaries for the cluster sizes?
 
+## Explicit solver
+
+My first attempts to optimally solve the above introduced problem were their formulation as a linear program, for which there are many good solvers available. It turns out there is an easy way to solve it explicitly and linear in the number of points, so there is no need to reduce it to a linear program, which takes much longer to solve. This is implemented in the `smartcluster.flatten`.
+
 ## Solution as linear integer program
+
+The problem can be formulated as linear program, but since there is an explicit solver this is pointless. It's for the curious and possibly useful for a more complicated objective function that creates dependencies that can not be resolved by walking the dendrogram.
 
 The feasible set is the set of all combinations of branches, that make up a clustering, which is those that don't have clusters included in clusters (partial overlaps are excluded by the tree structure). Linear integer programming is a natural choice for the optimization, with the binary solutions marking the chosen cluster links. Solvers for this type of problems are not terribly efficient, so we don't want to go beyond linear optimization.
 
@@ -32,10 +38,9 @@ where x is a vector with components indicating potential clusters, i.e. we optim
 \sum_i c(x_i) * x_i.
 The second and third factor do the job pushing cluster size towards 1/2 the point sets size, which seems a bit arbitrary but does the job.
 
-## Remarks
+The scipy linear program solver is too slow for problems of size 100 already (1 sec). You can use an external one through the pulp package.
 
-### Performance
-The scipy linear program solver is too slow for problems of size 100 already (1 sec), so we use an external one through the pulp package.
+## Remarks
 
 ### Sample data
 The notebook does nearest neighbour search on vectorizations of wikipedia articles. Those vectorizations are derived from word embeddings. The data is included as such, because it would take some effort to create random data with realistic properties. The data is not easily separable due to its similarity, as it comes from a similarity search.
