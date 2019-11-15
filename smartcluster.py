@@ -2,11 +2,14 @@ import numpy as np
 from scipy.cluster.hierarchy import dendrogram, to_tree
 from collections import defaultdict
 
-colors = '#FFC312 #C4E538 #12CBC4 #ED4C67 #F79F1F #A3CB38 #1289A7 #B53471 #EE5A24 ' \
-         '#009432 #0652DD #833471 #EA2027 #006266 #1B1464 #6F1E51'.split()
+colors = (
+    "#FFC312 #C4E538 #12CBC4 #ED4C67 #F79F1F #A3CB38 #1289A7 #B53471 #EE5A24 "
+    "#009432 #0652DD #833471 #EA2027 #006266 #1B1464 #6F1E51".split()
+)
 
+DEFAULT_STIFFNESS = 1.7
 
-def flatten(Z, stiffness):
+def flatten(Z, stiffness=DEFAULT_STIFFNESS):
     """
     Flatten hierarchical cluster tree like `get_lp` but explicitly without invoking
     LP solver.
@@ -24,16 +27,21 @@ def flatten(Z, stiffness):
         """Score nodes and max-aggregate scores on subtrees."""
         nonlocal n_links, id2cluster
 
-        node.score = (parent_dist - node.dist) * \
-                     (n_links - node.count) ** stiffness * node.count ** stiffness
+        node.score = (
+            (parent_dist - node.dist)
+            * (n_links - node.count) ** stiffness
+            * node.count ** stiffness
+        )
 
         if node.left is None or node.right is None:
             node.max_score = node.score
             id2cluster[node.id] = node.id
             return [node.id]
 
-        sub_ids = [*_score_tree(node.left, node.dist),
-                   *_score_tree(node.right, node.dist)]
+        sub_ids = [
+            *_score_tree(node.left, node.dist),
+            *_score_tree(node.right, node.dist),
+        ]
 
         sub_sum = node.left.max_score + node.right.max_score
         node.max_score = max(node.score, sub_sum)
@@ -87,13 +95,13 @@ def get_lp(Z, stiffness):
 
     for i in range(n_pts):
         A[i, i] = 1
-        obj[i] = - superdist[i] * (n_pts - 1) ** stiffness
+        obj[i] = -superdist[i] * (n_pts - 1) ** stiffness
 
     for i, (l, r, dist, cnt) in enumerate(Z):
         c = i + n_pts
         l, r = int(l), int(r)
         A[:, c] += A[:, l] + A[:, r]
-        obj[c] = - (superdist[c] - dist) * cnt ** stiffness * (n_pts - cnt) ** stiffness
+        obj[c] = -(superdist[c] - dist) * cnt ** stiffness * (n_pts - cnt) ** stiffness
 
     return A, b, obj
 
@@ -114,7 +122,7 @@ def plot_tree(Z, cluster_heads, **dendrogram_params):
         subtree(Z[c - n_pts, 0], col)
         subtree(Z[c - n_pts, 1], col)
 
-    link_cols = defaultdict(lambda: '#5758BB')
+    link_cols = defaultdict(lambda: "#5758BB")
     for i, clh in enumerate(cluster_heads):
         subtree(clh, colors[i % len(colors)])
 
